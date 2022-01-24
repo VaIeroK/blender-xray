@@ -10,6 +10,7 @@ from .. import version_utils
 from .. import ops
 from .. import rig
 from .. import viewer
+from .. import xrlc
 
 # plugin modules
 from .. import obj
@@ -446,6 +447,26 @@ class XRAY_PT_rig(bpy.types.Panel):
             )
 
 
+class XRAY_PT_level_utils(bpy.types.Panel):
+    bl_label = 'Level Utils'
+    bl_space_type = 'VIEW_3D'
+    bl_category = ui.base.CATEGORY
+    bl_options = {'DEFAULT_CLOSED'}
+    if version_utils.IS_28:
+        bl_region_type = 'UI'
+    else:
+        bl_region_type = 'TOOLS'
+
+    def draw_header(self, context):
+        icon = icons.get_stalker_icon()
+        self.layout.label(icon_value=icon)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator(xrlc.ops.XRAY_OT_build_lmap_uv.bl_idname)
+        layout.operator(xrlc.ops.XRAY_OT_bake_shadows.bl_idname)
+
+
 class XRAY_PT_import_operators(bpy.types.Panel):
     bl_label = 'Import'
     bl_category = ui.base.CATEGORY
@@ -577,6 +598,7 @@ classes = (
     XRAY_PT_custom_props,
     XRAY_PT_armature_tools,
     XRAY_PT_rig,
+    XRAY_PT_level_utils,
     XRAY_PT_import_operators,
     XRAY_PT_export_operators
 )

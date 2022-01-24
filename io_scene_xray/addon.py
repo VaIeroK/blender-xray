@@ -13,6 +13,7 @@ from . import viewport
 from . import skls_browser
 from . import edit_helpers
 from . import viewer
+from . import xrlc
 from . import translate
 from . import tests
 
@@ -22,6 +23,7 @@ modules = (
     prefs,
     skls_browser,
     viewer,
+    xrlc,
     props,
     plugins,
     handlers,
