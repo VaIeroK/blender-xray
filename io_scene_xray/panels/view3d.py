@@ -464,7 +464,7 @@ class XRAY_PT_level_utils(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         layout.operator(xrlc.ops.XRAY_OT_build_lmap_uv.bl_idname)
-        layout.operator(xrlc.ops.XRAY_OT_bake_shadows.bl_idname)
+        layout.operator(xrlc.ops.XRAY_OT_merge_objects.bl_idname)
 
 
 class XRAY_PT_import_operators(bpy.types.Panel):
