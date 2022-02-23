@@ -14,6 +14,7 @@ from .. import ie_props
 from .. import ui
 from .. import utils
 from .. import xray_motions
+from .. import draw_utils
 from .. import version_utils
 
 
@@ -27,12 +28,14 @@ motion_props = {
 
 
 class Motion(bpy.types.PropertyGroup):
+    props = motion_props
+
     if not version_utils.IS_28:
-        exec('{0} = motion_props.get("{0}")'.format('flag'))
-        exec('{0} = motion_props.get("{0}")'.format('name'))
+        exec('{0} = props.get("{0}")'.format('flag'))
+        exec('{0} = props.get("{0}")'.format('name'))
 
 
-op_import_skls_props = {
+import_props = {
     'filter_glob': bpy.props.StringProperty(default='*.skl;*.skls', options={'HIDDEN'}),
     'directory': bpy.props.StringProperty(subtype='DIR_PATH'),
     'files': bpy.props.CollectionProperty(type=bpy.types.OperatorFileListElement),
@@ -50,19 +53,20 @@ class XRAY_OT_import_skls(ie_props.BaseOperator, bpy_extras.io_utils.ImportHelpe
     text = op_text
     ext = '.skl/.skls'
     filename_ext = filename_ext
+    props = import_props
 
     if not version_utils.IS_28:
-        for prop_name, prop_value in op_import_skls_props.items():
-            exec('{0} = op_import_skls_props.get("{0}")'.format(prop_name))
+        for prop_name, prop_value in props.items():
+            exec('{0} = props.get("{0}")'.format(prop_name))
 
     __parsed_file_name = None
 
     def draw(self, context):
         layout = self.layout
+
+        draw_utils.draw_files_count(self)
+
         layout.prop(self, 'add_actions_to_motion_list')
-        row = layout.row()
-        row.enabled = False
-        row.label(text='%d items' % len(self.files))
 
         motions, count = self._get_motions(), 0
         text = 'Filter Motions'
@@ -161,7 +165,7 @@ class XRAY_OT_import_skls(ie_props.BaseOperator, bpy_extras.io_utils.ImportHelpe
 
 
 filename_ext = '.skl'
-op_export_skl_props = {
+export_props = {
     'filter_glob': bpy.props.StringProperty(default='*' + filename_ext, options={'HIDDEN'}),
 }
 
@@ -173,10 +177,11 @@ class XRAY_OT_export_skl(ie_props.BaseOperator, bpy_extras.io_utils.ExportHelper
     bl_options = {'UNDO'}
 
     filename_ext = filename_ext
+    props = export_props
 
     if not version_utils.IS_28:
-        for prop_name, prop_value in op_export_skl_props.items():
-            exec('{0} = op_export_skl_props.get("{0}")'.format(prop_name))
+        for prop_name, prop_value in props.items():
+            exec('{0} = props.get("{0}")'.format(prop_name))
 
     action = None
 
@@ -204,7 +209,7 @@ class XRAY_OT_export_skl(ie_props.BaseOperator, bpy_extras.io_utils.ExportHelper
 
 
 filename_ext = '.skls'
-op_export_skls_props = {
+export_props = {
     'filter_glob': bpy.props.StringProperty(default='*' + filename_ext, options={'HIDDEN'}),
 }
 
@@ -218,10 +223,11 @@ class XRAY_OT_export_skls(ie_props.BaseOperator, utils.FilenameExtHelper):
     text = op_text
     ext = filename_ext
     filename_ext = filename_ext
+    props = export_props
 
     if not version_utils.IS_28:
-        for prop_name, prop_value in op_export_skls_props.items():
-            exec('{0} = op_export_skls_props.get("{0}")'.format(prop_name))
+        for prop_name, prop_value in props.items():
+            exec('{0} = props.get("{0}")'.format(prop_name))
 
     def export(self, context):
         export_context = exp.ExportSklsContext()
@@ -246,7 +252,7 @@ class XRAY_OT_export_skls(ie_props.BaseOperator, utils.FilenameExtHelper):
 
 filename_ext = '.skl'
 op_text = 'Skeletal Animation'
-op_export_skl_batch_props = {
+export_props = {
     'directory': bpy.props.StringProperty(subtype="FILE_PATH"),
     'filter_glob': bpy.props.StringProperty(default='*' + filename_ext, options={'HIDDEN'}),
 }
@@ -261,10 +267,11 @@ class XRAY_OT_export_skl_batch(ie_props.BaseOperator):
     text = op_text
     ext = filename_ext
     filename_ext = filename_ext
+    props = export_props
 
     if not version_utils.IS_28:
-        for prop_name, prop_value in op_export_skls_props.items():
-            exec('{0} = op_export_skls_props.get("{0}")'.format(prop_name))
+        for prop_name, prop_value in props.items():
+            exec('{0} = props.get("{0}")'.format(prop_name))
 
     @utils.execute_with_logger
     @utils.set_cursor_state
@@ -315,20 +322,18 @@ class XRAY_OT_export_skl_batch(ie_props.BaseOperator):
 
 
 classes = (
-    (Motion, motion_props),
-    (XRAY_OT_import_skls, op_import_skls_props),
-    (XRAY_OT_export_skl, op_export_skl_props),
-    (XRAY_OT_export_skls, op_export_skls_props),
-    (XRAY_OT_export_skl_batch, op_export_skl_batch_props)
+    Motion,
+    XRAY_OT_import_skls,
+    XRAY_OT_export_skl,
+    XRAY_OT_export_skls,
+    XRAY_OT_export_skl_batch
 )
 
 
 def register():
-    for operator, props in classes:
-        version_utils.assign_props([(props, operator), ])
-        bpy.utils.register_class(operator)
+    version_utils.register_operators(classes)
 
 
 def unregister():
-    for operator, props in reversed(classes):
+    for operator in reversed(classes):
         bpy.utils.unregister_class(operator)

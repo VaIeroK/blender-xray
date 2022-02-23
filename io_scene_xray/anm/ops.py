@@ -12,6 +12,7 @@ from .. import icons
 from .. import log
 from .. import utils
 from .. import text
+from .. import draw_utils
 from .. import version_utils
 from .. import ie_props
 
@@ -19,7 +20,7 @@ from .. import ie_props
 filename_ext = '.anm'
 op_text = 'Animation Paths'
 
-op_import_anm_props = {
+import_props = {
     'filter_glob': bpy.props.StringProperty(
         default='*'+filename_ext,
         options={'HIDDEN'}
@@ -44,20 +45,15 @@ class XRAY_OT_import_anm(
     text = op_text
     ext = filename_ext
     filename_ext = filename_ext
+    props = import_props
 
     if not version_utils.IS_28:
-        for prop_name, prop_value in op_import_anm_props.items():
-            exec('{0} = op_import_anm_props.get("{0}")'.format(prop_name))
+        for prop_name, prop_value in props.items():
+            exec('{0} = props.get("{0}")'.format(prop_name))
 
     def draw(self, context):
         layout = self.layout
-        row = layout.row()
-        row.enabled = False
-        files_count = len(self.files)
-        if files_count == 1:
-            if not self.files[0].name:
-                files_count = 0
-        row.label(text='{} items'.format(files_count))
+        draw_utils.draw_files_count(self)
         layout.prop(self, 'camera_animation')
 
     @utils.execute_with_logger
@@ -84,7 +80,7 @@ class XRAY_OT_import_anm(
         return super().invoke(context, event)
 
 
-op_export_anm_props = {
+export_props = {
     'filter_glob': bpy.props.StringProperty(
         default='*'+filename_ext,
         options={'HIDDEN'}
@@ -105,14 +101,15 @@ class XRAY_OT_export_anm(
     text = op_text
     ext = filename_ext
     filename_ext = filename_ext
+    props = export_props
 
     if not version_utils.IS_28:
-        for prop_name, prop_value in op_export_anm_props.items():
-            exec('{0} = op_export_anm_props.get("{0}")'.format(prop_name))
+        for prop_name, prop_value in props.items():
+            exec('{0} = props.get("{0}")'.format(prop_name))
 
     def draw(self, context):
         layout = self.layout
-        utils.draw_fmt_ver_prop(layout, self, 'format_version')
+        draw_utils.draw_fmt_ver_prop(layout, self, 'format_version')
 
     @utils.execute_with_logger
     @utils.set_cursor_state
@@ -151,17 +148,15 @@ class XRAY_OT_export_anm(
 
 
 classes = (
-    (XRAY_OT_import_anm, op_import_anm_props),
-    (XRAY_OT_export_anm, op_export_anm_props)
+    XRAY_OT_import_anm,
+    XRAY_OT_export_anm
 )
 
 
 def register():
-    for operator, properties in classes:
-        version_utils.assign_props([(properties, operator), ])
-        bpy.utils.register_class(operator)
+    version_utils.register_operators(classes)
 
 
 def unregister():
-    for operator, properties in reversed(classes):
+    for operator in reversed(classes):
         bpy.utils.unregister_class(operator)

@@ -11,11 +11,13 @@ from .. import imp
 from ... import icons
 from ... import log
 from ... import utils
+from ... import draw_utils
 from ... import version_utils
 from ... import ie_props
+from ... import ie_utils
 
 
-op_import_object_props = {
+import_props = {
     'filter_glob': bpy.props.StringProperty(
         default='*.object', options={'HIDDEN'}
     ),
@@ -40,10 +42,11 @@ class XRAY_OT_import_object(ie_props.BaseOperator, bpy_extras.io_utils.ImportHel
     text = 'Source Object'
     ext = filename_ext
     filename_ext = filename_ext
+    props = import_props
 
     if not version_utils.IS_28:
-        for prop_name, prop_value in op_import_object_props.items():
-            exec('{0} = op_import_object_props.get("{0}")'.format(prop_name))
+        for prop_name, prop_value in props.items():
+            exec('{0} = props.get("{0}")'.format(prop_name))
 
     @utils.execute_with_logger
     @utils.set_cursor_state
@@ -65,35 +68,22 @@ class XRAY_OT_import_object(ie_props.BaseOperator, bpy_extras.io_utils.ImportHel
         import_context.objects_folder=objects_folder
         for file in self.files:
             file_path = os.path.join(self.directory, file.name)
-            if not os.path.exists(file_path):
-                self.report(
-                    {'ERROR'}, 'File not found "{}"'.format(file_path)
-                )
-            else:
-                try:
-                    import_context.before_import_file()
-                    imp.import_file(file_path, import_context)
-                except utils.AppError as err:
-                    import_context.errors.append(err)
+            import_context.before_import_file()
+            try:
+                imp.import_file(file_path, import_context)
+            except utils.AppError as err:
+                import_context.errors.append(err)
         for err in import_context.errors:
             log.err(err)
         return {'FINISHED'}
 
     def draw(self, context):
         layout = self.layout
-        row = layout.row()
-        row.enabled = False
-        files_count = len(self.files)
-        if files_count == 1:
-            if not self.files[0].name:
-                files_count = 0
-        row.label(text='{} items'.format(files_count))
 
-        utils.draw_fmt_ver_prop(layout, self, 'fmt_version')
+        draw_utils.draw_files_count(self)
+        draw_utils.draw_fmt_ver_prop(layout, self, 'fmt_version')
 
         layout.prop(self, 'import_motions')
-        row = layout.row()
-        row.active = self.import_motions
         layout.prop(self, 'mesh_split_by_materials')
 
     def invoke(self, context, event):
@@ -105,10 +95,7 @@ class XRAY_OT_import_object(ie_props.BaseOperator, bpy_extras.io_utils.ImportHel
 
 
 def register():
-    version_utils.assign_props([
-        (op_import_object_props, XRAY_OT_import_object),
-    ])
-    bpy.utils.register_class(XRAY_OT_import_object)
+    version_utils.register_operators(XRAY_OT_import_object)
 
 
 def unregister():

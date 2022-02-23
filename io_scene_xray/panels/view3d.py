@@ -102,6 +102,24 @@ class XRAY_PT_viewer(bpy.types.Panel):
         scn = context.scene
         viewer_folder = scn.xray.viewer.folder
         if viewer_folder:
+            row = col.row(align=True)
+            row.label(text=viewer_folder)
+            row.operator(
+                viewer.XRAY_OT_viewer_open_current_folder.bl_idname,
+                text='',
+                icon='FILE_FOLDER'
+            )
+
+            row = col.row(align=True)
+            row.label(text='Sort:')
+            row.prop(scn.xray.viewer, 'sort', expand=True)
+
+            col_settings = col.column(align=True)
+            col_settings.prop(scn.xray.viewer, 'sort_reverse')
+            col_settings.prop(scn.xray.viewer, 'ignore_ext')
+            col_settings.prop(scn.xray.viewer, 'show_size')
+            col_settings.prop(scn.xray.viewer, 'group_by_ext')
+
             col.operator(
                 viewer.XRAY_OT_viewer_close_folder.bl_idname,
                 icon='X'

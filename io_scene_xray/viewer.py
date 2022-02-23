@@ -9,6 +9,10 @@ from . import version_utils
 from . import utils
 
 
+KB = 1024
+MB = KB ** 2
+
+
 class XRAY_UL_viewer_list_item(bpy.types.UIList):
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
@@ -20,6 +24,15 @@ class XRAY_UL_viewer_list_item(bpy.types.UIList):
                 row.active = False
             row.prop(item, 'select', text='')
             row.label(text=item.name, icon='FILE')
+            if context.scene.xray.viewer.show_size:
+                row = row.row()
+                row.alignment = 'RIGHT'
+                if item.size > MB:
+                    row.label(text='{:.1f} MB'.format(item.size / MB))
+                elif item.size > KB:
+                    row.label(text='{:.1f} KB'.format(item.size / KB))
+                else:
+                    row.label(text='{} Bytes'.format(item.size))
 
 
 def get_current_objects():
@@ -95,17 +108,24 @@ def remove_preview_data():
 
 
 def import_file(file):
+    scene = bpy.context.scene
+    viewer = scene.xray.viewer
     path = file.path
     directory = os.path.dirname(path)
+    prefs = version_utils.get_preferences()
+    if not os.path.isfile(path):
+        return
     if path.endswith('.object'):
         bpy.ops.xray_import.object(
             directory=directory,
             files=[{'name': file.name}],
+            import_motions=prefs.object_motions_import
         )
     elif path.endswith('.ogf'):
         bpy.ops.xray_import.ogf(
             directory=directory,
             files=[{'name': file.name}],
+            import_motions=prefs.ogf_import_motions
         )
     elif path.endswith('.dm'):
         bpy.ops.xray_import.dm(
@@ -118,6 +138,29 @@ def import_file(file):
             files=[{'name': file.name}],
             load_slots=False
         )
+    else:
+        if viewer.ignore_ext:
+            try:
+                bpy.ops.xray_import.object(
+                    directory=directory,
+                    files=[{'name': file.name}],
+                    import_motions=prefs.object_motions_import
+                )
+            except:
+                pass
+
+
+ext_ignore = [
+    '.dds',
+    '.tga',
+    '.thm',
+    '.ogm',
+    '.wav',
+    '.ogg',
+    '.spawn',
+    '.graph',
+    '.ai'
+]
 
 
 def update_file(self, context):
@@ -125,8 +168,15 @@ def update_file(self, context):
     viewer = scene.xray.viewer
     file = viewer.files[viewer.files_index]
     if file.is_dir:
-        scene.xray.viewer.folder = file.path
-        update_file_list(scene.xray.viewer.folder)
+        if viewer.is_preview_folder_mode:
+            viewer.is_preview_folder_mode = False
+            return
+        else:
+            scene.xray.viewer.folder = file.path
+            update_file_list(scene.xray.viewer.folder)
+    ext = os.path.splitext(file.name)[-1]
+    if ext in ext_ignore:
+        return
     remove_preview_data()
     old_objects = get_current_objects()
     import_file(file)
@@ -144,10 +194,11 @@ def update_file(self, context):
 ext_list = ['.ogf', '.object', '.dm', '.details']
 
 
-def update_file_list(directory):
+def update_file_list(directory, active_folder=None):
     scene = bpy.context.scene
-    scene.xray.viewer.files.clear()
-    viewer_files = scene.xray.viewer.files
+    viewer = scene.xray.viewer
+    viewer.files.clear()
+    viewer_files = viewer.files
     dirs = []
     files = []
     for file_name in os.listdir(directory):
@@ -156,18 +207,68 @@ def update_file_list(directory):
             dirs.append((file_name, file_path))
         else:
             _, ext = os.path.splitext(file_name)
-            if not ext in ext_list:
+            if not ext in ext_list and not viewer.ignore_ext:
                 continue
             files.append((file_name, file_path))
-    dirs.sort()
-    files.sort()
     is_dir = (True, False)
+    file_groups = {}
     for index, file_list in enumerate((dirs, files)):
         for file_name, file_path in file_list:
+            is_directory = is_dir[index]
+            size = os.path.getsize(file_path)
+            if is_directory:
+                ext = ''
+            else:
+                ext = os.path.splitext(file_name)[-1]
+                if not ext:
+                    ext = '.'
+            if not viewer.group_by_ext:
+                file_groups.setdefault(is_directory, []).append((
+                    file_name,
+                    file_path,
+                    is_directory,
+                    size
+                ))
+            else:
+                file_groups.setdefault(ext, []).append((
+                    file_name,
+                    file_path,
+                    is_directory,
+                    size
+                ))
+    file_index = 0
+    sort_by_name = lambda item: item[0]
+    if viewer.sort == 'NAME':
+        key = sort_by_name
+    else:
+        key = lambda item: item[3]
+    groups_keys = list(file_groups.keys())
+    if True in file_groups:
+        dir_index = groups_keys.index(True)
+        groups_keys.pop(dir_index)
+        groups_keys.insert(0, True)
+    for group_key in groups_keys:
+        files_list = file_groups[group_key]
+        if group_key == True:    # folders
+            files_list.sort(key=sort_by_name, reverse=viewer.sort_reverse)
+        else:
+            files_list.sort(key=key, reverse=viewer.sort_reverse)
+        for file_name, file_path, is_directory, size in files_list:
             file = viewer_files.add()
             file.name = file_name
             file.path = file_path
-            file.is_dir = is_dir[index]
+            file.size = size
+            file.is_dir = is_directory
+            if is_directory:
+                if active_folder:
+                    if file_name == active_folder:
+                        viewer.files_index = file_index
+            file_index += 1
+
+
+def update_file_list_ext(self, context):
+    scene = context.scene
+    update_file_list(scene.xray.viewer.folder)
 
 
 op_props = {
@@ -199,6 +300,20 @@ class XRAY_OT_viewer_open_folder(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
 
+class XRAY_OT_viewer_open_current_folder(bpy.types.Operator):
+    bl_idname = 'io_scene_xray.viewer_open_current_folder'
+    bl_label = 'Open Current Folder'
+    bl_options = {'REGISTER'}
+
+    @utils.set_cursor_state
+    def execute(self, context):
+        scene = context.scene
+        folder = scene.xray.viewer.folder
+        folder = os.path.realpath(folder)
+        os.startfile(folder)
+        return {'FINISHED'}
+
+
 class XRAY_OT_viewer_close_folder(bpy.types.Operator):
     bl_idname = 'io_scene_xray.viewer_close_folder'
     bl_label = 'Close Folder'
@@ -225,9 +340,11 @@ class XRAY_OT_viewer_preview_folder(bpy.types.Operator):
         if viewer_folder:
             if viewer_folder[-1] == os.sep:
                 viewer_folder = viewer_folder[0 : -1]
+            active_folder = os.path.basename(viewer_folder)
             viewer_folder = os.path.dirname(viewer_folder)
             scene.xray.viewer.folder = viewer_folder
-            update_file_list(scene.xray.viewer.folder)
+            scene.xray.viewer.is_preview_folder_mode = True
+            update_file_list(scene.xray.viewer.folder, active_folder)
             remove_preview_data()
         return {'FINISHED'}
 
@@ -310,7 +427,8 @@ viewer_file_props = {
     'name': bpy.props.StringProperty(name='Name'),
     'path': bpy.props.StringProperty(name='Path'),
     'select': bpy.props.BoolProperty(name='Select', default=True),
-    'is_dir': bpy.props.BoolProperty(name='Directory')
+    'is_dir': bpy.props.BoolProperty(name='Directory'),
+    'size': bpy.props.IntProperty(name='Size')
 }
 
 
@@ -320,10 +438,36 @@ class XRayViwerFileProperties(bpy.types.PropertyGroup):
             exec('{0} = viewer_file_props.get("{0}")'.format(prop_name))
 
 
+sort_items = (
+    ('NAME', 'Name', ''),
+    ('SIZE', 'Size', '')
+)
 scene_viewer_props = {
     'files': bpy.props.CollectionProperty(type=XRayViwerFileProperties),
     'files_index': bpy.props.IntProperty(update=update_file),
-    'folder': bpy.props.StringProperty()
+    'folder': bpy.props.StringProperty(),
+    'is_preview_folder_mode': bpy.props.BoolProperty(default=False),
+    'ignore_ext': bpy.props.BoolProperty(
+        default=False,
+        name='Ignore Extension',
+        update=update_file_list_ext
+    ),
+    'show_size': bpy.props.BoolProperty(default=False, name='Show Size'),
+    'sort': bpy.props.EnumProperty(
+        name='Sort',
+        items=sort_items,
+        update=update_file_list_ext
+    ),
+    'group_by_ext': bpy.props.BoolProperty(
+        default=False,
+        name='Group by Extension',
+        update=update_file_list_ext
+    ),
+    'sort_reverse': bpy.props.BoolProperty(
+        default=False,
+        name='Reverse Sort',
+        update=update_file_list_ext
+    )
 }
 
 
@@ -340,6 +484,7 @@ classes = (
     (XRAY_OT_viewer_close_folder, None),
     (XRAY_OT_viewer_preview_folder, None),
     (XRAY_OT_viewer_open_folder, op_props),
+    (XRAY_OT_viewer_open_current_folder, None),
     (XRAY_OT_viewer_import_files, op_import_props),
     (XRAY_OT_viewer_select_files, op_select_props)
 )
